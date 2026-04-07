@@ -1,0 +1,416 @@
+================================================================================
+    KAVACH AI - CYBER SAFETY SIMULATOR
+    RUN & DEPLOY GUIDE (Google Cloud Console)
+================================================================================
+
+
+TABLE OF CONTENTS
+-----------------
+  1. Prerequisites
+  2. Running Locally (Development)
+  3. Deploying to Google Cloud Run (Production)
+  4. Deploying via Google Cloud Console (Web UI)
+  5. Environment Variables
+  6. Troubleshooting
+  7. Project Structure
+
+
+================================================================================
+1. PREREQUISITES
+================================================================================
+
+Local Development:
+  - Python 3.11+         (https://www.python.org/downloads/)
+  - Node.js 18+          (https://nodejs.org/)
+  - npm                   (comes with Node.js)
+  - Git                   (https://git-scm.com/)
+  - Google Gemini API Key (https://aistudio.google.com/apikey)
+
+Google Cloud Deployment:
+  - Google Cloud account  (https://console.cloud.google.com/)
+  - Google Cloud SDK      (https://cloud.google.com/sdk/docs/install)
+  - Docker Desktop        (https://www.docker.com/products/docker-desktop/)
+    (Only needed if building locally; Cloud Build handles it otherwise)
+
+
+================================================================================
+2. RUNNING LOCALLY (DEVELOPMENT)
+================================================================================
+
+Step 1: Clone or navigate to the project
+-----------------------------------------
+  cd Cyber_Safety_Simulator-main
+
+
+Step 2: Set up environment variables
+--------------------------------------
+  Create/edit the file:  kavach_backend/.env
+
+  Add your Gemini API key:
+    GEMINI_API_KEY=your_actual_api_key_here
+
+  Get your key from: https://aistudio.google.com/apikey
+
+
+Step 3: Start the Backend (Terminal 1)
+---------------------------------------
+  cd kavach_backend
+  pip install -r requirements.txt
+  python main.py
+
+  Output should show:
+    ✅ Infiltrator agent initialised with models/gemini-...
+    ✅ Forensic agent initialised with models/gemini-...
+    ✅ Mentor agent initialised with models/gemini-...
+    INFO:     Uvicorn running on http://0.0.0.0:8000
+
+  Test it:
+    Open browser: http://127.0.0.1:8000/health
+    Should return: {"success": true, "data": {"status": "ok"}, "message": "Server healthy"}
+
+
+Step 4: Start the Frontend (Terminal 2)
+----------------------------------------
+  cd kavach_frontend
+  npm install
+  npm run dev
+
+  Output should show:
+    VITE ready in ... ms
+    Local: http://localhost:8080/
+
+  Open browser: http://localhost:8080
+
+
+Step 5: Verify the full flow
+------------------------------
+  1. Go to http://localhost:8080
+  2. Click "Scam Detector" in the sidebar
+  3. Paste a test message:
+     "URGENT: Your bank account will be blocked! Send OTP immediately."
+  4. Click "Analyze"
+  5. You should see "High Risk Scam" with a confidence score
+  6. Go to "Dashboard" to see the detection in history
+
+
+================================================================================
+3. DEPLOYING TO GOOGLE CLOUD RUN (using gcloud CLI)
+================================================================================
+
+This is the RECOMMENDED method for hackathon deployment.
+Google Cloud Run is serverless - you only pay when requests are made.
+
+
+Step 1: Install & initialize Google Cloud SDK
+----------------------------------------------
+  Download: https://cloud.google.com/sdk/docs/install
+
+  Then run:
+    gcloud init
+    gcloud auth login
+
+  Select or create a project:
+    gcloud projects create kavach-ai-simulator --name="Kavach AI"
+    gcloud config set project kavach-ai-simulator
+
+
+Step 2: Enable required APIs
+------------------------------
+    gcloud services enable cloudbuild.googleapis.com
+    gcloud services enable run.googleapis.com
+    gcloud services enable artifactregistry.googleapis.com
+
+
+Step 3: Update frontend API URL for production
+------------------------------------------------
+  Before deploying, the frontend needs to know the backend URL.
+  Since both are served from the same container in production,
+  the API calls will go to the same origin.
+
+  Create or edit file:  kavach_frontend/.env.production
+    VITE_API_URL=
+
+  (Leave it empty — this makes the frontend use relative URLs,
+   which works when backend serves the frontend static files)
+
+
+Step 4: Build and deploy with a single command
+------------------------------------------------
+  From the project root directory:
+
+    gcloud run deploy kavach-ai \
+      --source . \
+      --region asia-south1 \
+      --allow-unauthenticated \
+      --set-env-vars GEMINI_API_KEY=your_actual_api_key_here \
+      --memory 1Gi \
+      --timeout 60 \
+      --port 8080
+
+  NOTE: Replace "your_actual_api_key_here" with your real Gemini API key.
+  NOTE: Use "asia-south1" for India (Mumbai region) or pick your closest region.
+
+  This command will:
+    - Build the Docker image using Cloud Build
+    - Push it to Artifact Registry
+    - Deploy it on Cloud Run
+    - Give you a public URL
+
+
+Step 5: Get your deployment URL
+---------------------------------
+  After deployment, you'll see output like:
+    Service URL: https://kavach-ai-xxxxxxxxxx-el.a.run.app
+
+  Open this URL in your browser — your app is live!
+
+
+Step 6: (Optional) Set up a custom domain
+-------------------------------------------
+    gcloud run domain-mappings create \
+      --service kavach-ai \
+      --domain your-domain.com \
+      --region asia-south1
+
+
+================================================================================
+4. DEPLOYING VIA GOOGLE CLOUD CONSOLE (Web UI)
+================================================================================
+
+If you prefer the web interface instead of CLI:
+
+
+Step 1: Go to Google Cloud Console
+------------------------------------
+  https://console.cloud.google.com/
+
+
+Step 2: Create a new project
+------------------------------
+  1. Click the project dropdown at the top
+  2. Click "New Project"
+  3. Name: "Kavach AI Simulator"
+  4. Click "Create"
+  5. Select the new project
+
+
+Step 3: Enable Cloud Run API
+------------------------------
+  1. Go to: APIs & Services > Library
+     https://console.cloud.google.com/apis/library
+  2. Search "Cloud Run Admin API"
+  3. Click "Enable"
+  4. Also enable "Cloud Build API"
+
+
+Step 4: Open Cloud Shell
+--------------------------
+  1. Click the Cloud Shell icon (>_) at the top right of the console
+  2. A terminal will open at the bottom of the page
+
+
+Step 5: Upload your project to Cloud Shell
+--------------------------------------------
+  Option A - Upload ZIP:
+    1. Zip your project folder (Cyber_Safety_Simulator-main)
+    2. In Cloud Shell, click the 3-dot menu > "Upload"
+    3. Upload the zip file
+    4. Run: unzip Cyber_Safety_Simulator-main.zip
+
+  Option B - Clone from GitHub:
+    git clone https://github.com/your-username/your-repo.git
+    cd your-repo
+
+
+Step 6: Set environment variable
+----------------------------------
+  In Cloud Shell, run:
+    export GEMINI_API_KEY="your_actual_api_key_here"
+
+
+Step 7: Create the frontend production env file
+-------------------------------------------------
+  In Cloud Shell, run:
+    echo "VITE_API_URL=" > kavach_frontend/.env.production
+
+
+Step 8: Deploy to Cloud Run
+------------------------------
+  In Cloud Shell, run:
+
+    gcloud run deploy kavach-ai \
+      --source . \
+      --region asia-south1 \
+      --allow-unauthenticated \
+      --set-env-vars GEMINI_API_KEY=$GEMINI_API_KEY \
+      --memory 1Gi \
+      --timeout 60 \
+      --port 8080
+
+  When prompted:
+    - "Allow unauthenticated invocations?" → Yes
+    - Select region → asia-south1 (or your preferred)
+
+
+Step 9: Access your deployed app
+-----------------------------------
+  The deployment will output a URL like:
+    https://kavach-ai-xxxxxxxxxx-el.a.run.app
+
+  Click the URL to open your live app!
+
+
+Step 10: Managing the deployment
+----------------------------------
+  View your service:
+    1. Go to: https://console.cloud.google.com/run
+    2. Click "kavach-ai"
+    3. You can see logs, metrics, and manage revisions
+
+  Update the API key later:
+    1. Go to Cloud Run > kavach-ai > "Edit & Deploy New Revision"
+    2. Under "Variables & Secrets", update GEMINI_API_KEY
+    3. Click "Deploy"
+
+  View logs:
+    1. Cloud Run > kavach-ai > "Logs" tab
+    2. Or use: gcloud run services logs read kavach-ai --region asia-south1
+
+
+================================================================================
+5. ENVIRONMENT VARIABLES
+================================================================================
+
+  Variable Name       Required   Description
+  ─────────────       ────────   ───────────
+  GEMINI_API_KEY      Yes        Google Gemini API key for AI agents
+  PORT                No         Server port (default: 8000 local, 8080 Cloud Run)
+  VITE_API_URL        No         Backend URL for frontend (empty = same origin)
+
+  Getting a Gemini API Key:
+    1. Go to https://aistudio.google.com/apikey
+    2. Click "Create API Key"
+    3. Select your Google Cloud project (or create one)
+    4. Copy the key
+
+
+================================================================================
+6. TROUBLESHOOTING
+================================================================================
+
+Problem: "No GEMINI_API_KEY found" warning on startup
+  → Make sure kavach_backend/.env has: GEMINI_API_KEY=your_key
+  → For Cloud Run: check the env var is set in the service config
+
+Problem: Frontend shows "Connection Error"
+  → Make sure the backend is running on port 8000
+  → Check CORS: backend already allows all origins (*)
+  → For Cloud Run: make sure VITE_API_URL is empty (same origin)
+
+Problem: "Agent unavailable" response
+  → Your Gemini API key may be invalid or expired
+  → Check the backend console logs for specific errors
+  → Try regenerating your API key at https://aistudio.google.com/apikey
+
+Problem: Docker build fails
+  → Make sure Docker Desktop is running (for local builds)
+  → For Cloud Build: check that Cloud Build API is enabled
+  → Run: gcloud services enable cloudbuild.googleapis.com
+
+Problem: Cloud Run returns 502/503
+  → Check logs: gcloud run services logs read kavach-ai --region asia-south1
+  → Increase memory: --memory 2Gi
+  → Increase timeout: --timeout 120
+
+Problem: "ModuleNotFoundError" on Cloud Run
+  → Verify Dockerfile WORKDIR is set to /app/kavach_backend
+  → Verify requirements.txt includes all packages
+
+Problem: Old detection shows "7000%" confidence
+  → This is legacy data from before the fix. New detections show correct %.
+  → Delete kavach_backend/kavach.db to clear old data.
+
+
+================================================================================
+7. PROJECT STRUCTURE
+================================================================================
+
+  Cyber_Safety_Simulator-main/
+  │
+  ├── Dockerfile                    # Multi-stage build (frontend + backend)
+  ├── DEPLOYMENT_GUIDE.txt          # This file
+  ├── README.md                     # Project overview
+  │
+  ├── kavach_backend/               # FastAPI Backend (Python)
+  │   ├── main.py                   # API server entry point
+  │   ├── schemas.py                # Pydantic request/response models
+  │   ├── database.py               # SQLite logging
+  │   ├── models.py                 # Legacy rule-based logic (unused)
+  │   ├── requirements.txt          # Python dependencies
+  │   ├── .env                      # Environment variables (local only)
+  │   └── agents/                   # AI Agent System
+  │       ├── __init__.py
+  │       ├── agent_manager.py      # AgentManager class (Gemini API)
+  │       └── agent_prompts.py      # System prompts for 3 agents
+  │
+  └── kavach_frontend/              # React + TypeScript Frontend
+      ├── src/
+      │   ├── App.tsx               # Main app with routing
+      │   ├── lib/
+      │   │   └── api.ts            # Centralized API client
+      │   ├── pages/
+      │   │   ├── HomePage.tsx       # Landing page
+      │   │   ├── ScamDetector.tsx   # AI-powered scam detection
+      │   │   ├── WarRoom.tsx        # Scam simulation experience
+      │   │   ├── AnalysisPage.tsx   # Forensic analysis breakdown
+      │   │   ├── DefensePage.tsx    # Safe response checklist
+      │   │   └── DashboardPage.tsx  # Live stats & history
+      │   └── components/           # Reusable UI components
+      ├── package.json
+      └── vite.config.ts
+
+
+================================================================================
+  API ENDPOINTS
+================================================================================
+
+  Method   Path        Description                    Agent Used
+  ──────   ────        ───────────                    ──────────
+  GET      /           Root / health message          -
+  GET      /health     Health check                   -
+  POST     /detect     Classify message as SCAM/SAFE  Forensic
+  POST     /explain    Explain why scam/safe          Forensic
+  POST     /action     Recommend user actions         Mentor
+  POST     /simulate   Generate a fake scam message   Infiltrator
+  GET      /history    Get detection log              -
+
+
+================================================================================
+  QUICK DEPLOY CHEATSHEET
+================================================================================
+
+  # One-time setup
+  gcloud init
+  gcloud services enable cloudbuild.googleapis.com run.googleapis.com
+
+  # Deploy (run from project root)
+  gcloud run deploy kavach-ai \
+    --source . \
+    --region asia-south1 \
+    --allow-unauthenticated \
+    --set-env-vars GEMINI_API_KEY=your_key_here \
+    --memory 1Gi \
+    --port 8080
+
+  # Update after code changes
+  gcloud run deploy kavach-ai --source . --region asia-south1
+
+  # View logs
+  gcloud run services logs read kavach-ai --region asia-south1
+
+  # Delete (stop billing)
+  gcloud run services delete kavach-ai --region asia-south1
+
+================================================================================
+  END OF GUIDE
+================================================================================

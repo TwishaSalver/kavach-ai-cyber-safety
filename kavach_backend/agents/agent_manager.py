@@ -1,26 +1,32 @@
 import os
 import google.generativeai as genai
 from dotenv import load_dotenv
+
+# Load from the kavach_backend/.env regardless of cwd
+_env_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), ".env")
+load_dotenv(_env_path, override=True)
+
+# Import prompts – works when running from kavach_backend/ directory
 from agents.agent_prompts import INFILTRATOR_PROMPT, FORENSIC_PROMPT, MENTOR_PROMPT
 
-# Force reload dotenv and override system env vars to ensure we read from .env
-load_dotenv(override=True)
-
-# Temporarily remove GCP ADC to prevent scope/ALTS errors
+# Temporarily remove GCP ADC to prevent scope/ALTS errors in local dev
 if "GOOGLE_APPLICATION_CREDENTIALS" in os.environ:
     del os.environ["GOOGLE_APPLICATION_CREDENTIALS"]
 
-# Configure API Key securely
+# Configure API Key securely from environment
 api_key = os.environ.get("GEMINI_API_KEY", "").strip('"').strip("'").strip()
 if api_key:
     genai.configure(api_key=api_key)
 else:
-    print("Warning: No GEMINI_API_KEY found.")
+    print("⚠️  Warning: No GEMINI_API_KEY found. Agents will return fallback messages.")
+
 
 class AgentManager:
-    def __init__(self, agent_type):
+    """Wraps a Google Gemini chat model with a specific agent persona."""
+
+    def __init__(self, agent_type: str):
         self.agent_type = agent_type
-        
+
         system_instruction = ""
         if agent_type == "Infiltrator":
             system_instruction = INFILTRATOR_PROMPT
@@ -28,13 +34,17 @@ class AgentManager:
             system_instruction = FORENSIC_PROMPT
         elif agent_type == "Mentor":
             system_instruction = MENTOR_PROMPT
-            
+
         try:
             # Auto-detect a working model
-            available_models = [m.name for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
-            
-            # Prefer 1.5-flash if available, else take the first one
-            model_name = "gemini-1.5-flash" # Default attempt
+            available_models = [
+                m.name
+                for m in genai.list_models()
+                if "generateContent" in m.supported_generation_methods
+            ]
+
+            # Prefer flash → pro → first available
+            model_name = "gemini-1.5-flash"
             if "models/gemini-1.5-flash" in available_models:
                 model_name = "models/gemini-1.5-flash"
             elif "models/gemini-1.5-flash-latest" in available_models:
@@ -43,20 +53,26 @@ class AgentManager:
                 model_name = "models/gemini-pro"
             elif available_models:
                 model_name = available_models[0]
-                
+
             self.model = genai.GenerativeModel(
                 model_name=model_name,
-                system_instruction=system_instruction
+                system_instruction=system_instruction,
             )
             self.chat = self.model.start_chat(history=[])
+            print(f"✅ {agent_type} agent initialised with {model_name}")
+
         except Exception as e:
             self.model = None
             self.chat = None
-            print(f"Failed to initialize {agent_type}: {e}")
+            print(f"❌ Failed to initialise {agent_type}: {e}")
 
-    def send_message(self, message):
+    def send_message(self, message: str) -> str:
+        """Send a message to the agent and return its text response."""
         if not self.chat:
-            return "API Key missing or invalid configuration. Please check your .env file."
+            return (
+                "Agent unavailable – API key missing or invalid configuration. "
+                "Please check your .env file."
+            )
         try:
             response = self.chat.send_message(message)
             return response.text

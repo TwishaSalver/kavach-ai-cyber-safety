@@ -1,22 +1,9 @@
 import { motion } from "framer-motion";
 import { useEffect, useState } from "react";
-import { Shield, AlertTriangle, Eye, CheckCircle } from "lucide-react";
+import { Shield, AlertTriangle, Eye, CheckCircle, RefreshCw } from "lucide-react";
 import CircularProgress from "@/components/CircularProgress";
 import GlowCard from "@/components/GlowCard";
-
-const alerts = [
-  { time: "2 min ago", text: "Phishing SMS blocked from +91 98XXXXX", type: "danger" as const },
-  { time: "1 hour ago", text: "Suspicious link scan completed", type: "warning" as const },
-  { time: "3 hours ago", text: "War Room simulation completed", type: "safe" as const },
-  { time: "Yesterday", text: "Security score updated to 78%", type: "safe" as const },
-];
-
-const history = [
-  { message: "Your KYC is expiring...", result: "Scam", score: 92 },
-  { message: "Your order #4521 has shipped", result: "Safe", score: 8 },
-  { message: "You've won ₹50,000 lottery!", result: "Scam", score: 95 },
-  { message: "OTP for bank transfer: 4829", result: "Suspicious", score: 61 },
-];
+import { fetchHistory, type HistoryEntry } from "@/lib/api";
 
 const CountUpNumber = ({ value, className }: { value: number; className?: string }) => {
   const [display, setDisplay] = useState(0);
@@ -34,12 +21,55 @@ const CountUpNumber = ({ value, className }: { value: number; className?: string
 };
 
 const DashboardPage = () => {
+  const [history, setHistory] = useState<HistoryEntry[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const loadHistory = async () => {
+    setLoading(true);
+    try {
+      const res = await fetchHistory();
+      setHistory(res.data.history);
+    } catch {
+      // Backend unreachable – show empty state
+      setHistory([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadHistory();
+  }, []);
+
+  const scamCount = history.filter((h) => h.classification === "SCAM").length;
+  const safeCount = history.filter((h) => h.classification === "SAFE").length;
+  const totalCount = history.length;
+  const score = totalCount > 0 ? Math.round((safeCount / totalCount) * 100) : 100;
+
+  const alerts = history.slice(0, 4).map((h) => ({
+    time: new Date(h.timestamp).toLocaleString(),
+    text: `${h.classification} – ${h.message.slice(0, 50)}…`,
+    type: h.classification === "SCAM" ? ("danger" as const) : ("safe" as const),
+  }));
+
   return (
     <div className="p-6 md:p-8 max-w-6xl mx-auto space-y-8">
       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-2">
-        <h1 className="text-3xl font-bold text-foreground">Dashboard</h1>
-        <p className="text-muted-foreground">Your security overview and activity log</p>
-        <p className="text-xs text-cyber">Last scan: just now</p>
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold text-foreground">Dashboard</h1>
+            <p className="text-muted-foreground">Your security overview and activity log</p>
+          </div>
+          <motion.button
+            whileHover={{ scale: 1.05, rotate: 90 }}
+            whileTap={{ scale: 0.95 }}
+            onClick={loadHistory}
+            className="p-2 rounded-lg border border-border hover:bg-secondary transition-colors"
+          >
+            <RefreshCw className={`h-4 w-4 text-muted-foreground ${loading ? "animate-spin" : ""}`} />
+          </motion.button>
+        </div>
+        <p className="text-xs text-cyber">Live data from Kavach AI backend</p>
       </motion.div>
 
       {/* Top Cards */}
@@ -47,7 +77,7 @@ const DashboardPage = () => {
         <GlowCard glowColor="safe" delay={0.1}>
           <div className="flex flex-col items-center gap-4">
             <h3 className="text-sm font-medium text-muted-foreground">Security Score</h3>
-            <CircularProgress value={78} color="hsl(var(--safe))" />
+            <CircularProgress value={score} color="hsl(var(--safe))" />
           </div>
         </GlowCard>
 
@@ -56,20 +86,20 @@ const DashboardPage = () => {
             <h3 className="text-sm font-medium text-muted-foreground">Stats</h3>
             <div className="grid grid-cols-2 gap-3">
               <div className="text-center p-3 rounded-lg bg-secondary/30">
-                <CountUpNumber value={12} className="text-2xl font-bold text-foreground" />
+                <CountUpNumber value={totalCount} className="text-2xl font-bold text-foreground" />
                 <p className="text-xs text-muted-foreground">Scans</p>
               </div>
               <div className="text-center p-3 rounded-lg bg-secondary/30">
-                <CountUpNumber value={4} className="text-2xl font-bold text-danger" />
+                <CountUpNumber value={scamCount} className="text-2xl font-bold text-danger" />
                 <p className="text-xs text-muted-foreground">Threats</p>
               </div>
               <div className="text-center p-3 rounded-lg bg-secondary/30">
-                <CountUpNumber value={8} className="text-2xl font-bold text-safe" />
+                <CountUpNumber value={safeCount} className="text-2xl font-bold text-safe" />
                 <p className="text-xs text-muted-foreground">Safe</p>
               </div>
               <div className="text-center p-3 rounded-lg bg-secondary/30">
-                <CountUpNumber value={3} className="text-2xl font-bold text-warning" />
-                <p className="text-xs text-muted-foreground">Simulations</p>
+                <CountUpNumber value={totalCount} className="text-2xl font-bold text-warning" />
+                <p className="text-xs text-muted-foreground">Total</p>
               </div>
             </div>
           </div>
@@ -77,8 +107,11 @@ const DashboardPage = () => {
 
         <GlowCard glowColor="warning" delay={0.3}>
           <div className="space-y-3">
-            <h3 className="text-sm font-medium text-muted-foreground">Alerts Log</h3>
+            <h3 className="text-sm font-medium text-muted-foreground">Recent Alerts</h3>
             <div className="space-y-2">
+              {alerts.length === 0 && (
+                <p className="text-xs text-muted-foreground">No detections yet. Try the Scam Detector!</p>
+              )}
               {alerts.map((a, i) => (
                 <motion.div
                   key={i}
@@ -87,9 +120,11 @@ const DashboardPage = () => {
                   transition={{ delay: 0.4 + i * 0.1 }}
                   className="flex items-start gap-2 text-xs"
                 >
-                  <div className={`mt-1 w-2 h-2 rounded-full shrink-0 ${
-                    a.type === "danger" ? "bg-danger" : a.type === "warning" ? "bg-warning" : "bg-safe"
-                  }`} />
+                  <div
+                    className={`mt-1 w-2 h-2 rounded-full shrink-0 ${
+                      a.type === "danger" ? "bg-danger" : "bg-safe"
+                    }`}
+                  />
                   <div>
                     <p className="text-foreground">{a.text}</p>
                     <p className="text-muted-foreground">{a.time}</p>
@@ -101,7 +136,7 @@ const DashboardPage = () => {
         </GlowCard>
       </div>
 
-      {/* Detection History */}
+      {/* Detection History Table */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -115,40 +150,47 @@ const DashboardPage = () => {
           </h3>
         </div>
         <div className="divide-y divide-border">
+          {history.length === 0 && (
+            <div className="p-8 text-center text-muted-foreground text-sm">
+              {loading ? "Loading..." : "No detections recorded yet. Use the Scam Detector to get started."}
+            </div>
+          )}
           {history.map((h, i) => (
             <motion.div
-              key={i}
+              key={h.id}
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              transition={{ delay: 0.6 + i * 0.1 }}
+              transition={{ delay: 0.6 + i * 0.05 }}
               whileHover={{ scale: 1.01, x: 4 }}
               className={`p-4 flex items-center justify-between transition-all duration-200 ${
-                h.result === "Scam"
+                h.classification === "SCAM"
                   ? "hover:bg-danger/10 hover:shadow-[0_0_20px_hsla(0,84%,60%,0.18)]"
-                  : h.result === "Safe"
-                    ? "hover:bg-safe/10 hover:shadow-[0_0_20px_hsla(142,71%,45%,0.18)]"
-                    : "hover:bg-warning/10"
+                  : "hover:bg-safe/10 hover:shadow-[0_0_20px_hsla(142,71%,45%,0.18)]"
               }`}
             >
               <div className="flex items-center gap-3">
-                {h.result === "Scam" ? (
+                {h.classification === "SCAM" ? (
                   <AlertTriangle className="h-4 w-4 text-danger" />
-                ) : h.result === "Safe" ? (
-                  <CheckCircle className="h-4 w-4 text-safe" />
                 ) : (
-                  <Shield className="h-4 w-4 text-warning" />
+                  <CheckCircle className="h-4 w-4 text-safe" />
                 )}
-                <span className="text-sm text-foreground font-mono truncate max-w-xs">{h.message}</span>
+                <span className="text-sm text-foreground font-mono truncate max-w-xs">
+                  {h.message}
+                </span>
               </div>
               <div className="flex items-center gap-4">
-                <span className={`text-xs font-medium px-2 py-1 rounded-full ${
-                  h.result === "Scam" ? "bg-danger/20 text-danger" :
-                  h.result === "Safe" ? "bg-safe/20 text-safe" :
-                  "bg-warning/20 text-warning"
-                }`}>
-                  {h.result}
+                <span
+                  className={`text-xs font-medium px-2 py-1 rounded-full ${
+                    h.classification === "SCAM"
+                      ? "bg-danger/20 text-danger"
+                      : "bg-safe/20 text-safe"
+                  }`}
+                >
+                  {h.classification}
                 </span>
-                <span className="text-xs text-muted-foreground w-12 text-right">{h.score}%</span>
+                <span className="text-xs text-muted-foreground w-12 text-right">
+                  {Math.round(h.confidence > 1 ? h.confidence : h.confidence * 100)}%
+                </span>
               </div>
             </motion.div>
           ))}

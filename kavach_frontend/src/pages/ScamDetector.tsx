@@ -1,41 +1,23 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Search, AlertTriangle, ShieldCheck } from "lucide-react";
+import { Search, AlertTriangle, ShieldCheck, Loader2, WifiOff } from "lucide-react";
 import CircularProgress from "@/components/CircularProgress";
+import { detectScam } from "@/lib/api";
 
-// Keep keywords focused on scam patterns.
-// Generic words like "bank" cause false positives on legitimate notifications.
-const scamKeywords = [
-  "bit.ly",
-  "click here",
-  "urgent",
-  "immediately",
-  "act now",
-  "disconnect",
-  "suspended",
-  "verify your account",
-  "pay now",
-  "final warning",
-  "lottery",
-  "won",
-  "prize",
-  "otp",
-  "upi",
-  "debit",
-  "transfer",
-  "freeze",
-  "kyc",
-  "blocked",
-  "claim",
-  "processing fee",
-];
+interface DetectionResult {
+  isScam: boolean;
+  score: number;        // 0 – 100
+  reasons: string[];
+}
 
 const ScamDetector = () => {
   const [input, setInput] = useState("");
-  const [result, setResult] = useState<null | { isScam: boolean; score: number; reasons: string[]; matchedWords: string[] }>(null);
+  const [result, setResult] = useState<DetectionResult | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [displayScore, setDisplayScore] = useState(0);
 
+  // Animate score counter
   useEffect(() => {
     if (!result) {
       setDisplayScore(0);
@@ -52,55 +34,36 @@ const ScamDetector = () => {
     return () => clearInterval(id);
   }, [result]);
 
-  const highlightedMessage = useMemo(() => {
-    if (!result || !result.isScam) return input;
-    let output = input;
-    result.matchedWords.forEach((word) => {
-      const escaped = word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-      output = output.replace(new RegExp(escaped, "gi"), (match) => `[[${match}]]`);
-    });
-    return output;
-  }, [input, result]);
-
   const analyze = async () => {
-  if (!input.trim()) return;
+    const trimmed = input.trim();
+    if (!trimmed) return;
 
-  setAnalyzing(true);
-  setResult(null);
+    setAnalyzing(true);
+    setResult(null);
+    setError(null);
 
-  try {
-    const res = await fetch("http://127.0.0.1:8000/detect", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ text: input }),
-    });
+    try {
+      const res = await detectScam(trimmed);
+      const d = res.data;
 
-    const data = await res.json();
+      const isScam = d.classification === "SCAM";
+      const score = Math.round(d.confidence * 100);
 
-    // 👉 Adapt this based on your backend response
-    const isScam = data.result.toLowerCase().includes("scam");
+      // Split the reason into distinct bullet points
+      const reasons = d.reason
+        .split("\n")
+        .map((l: string) => l.trim())
+        .filter((l: string) => l.length > 0);
 
-    setResult({
-      isScam,
-      score: isScam ? 85 : 10,
-      reasons: [data.result],
-      matchedWords: [],
-    });
-
-  } catch (error) {
-    console.error("Error:", error);
-    setResult({
-      isScam: false,
-      score: 0,
-      reasons: ["Backend error"],
-      matchedWords: [],
-    });
-  }
-
-  setAnalyzing(false);
-};
+      setResult({ isScam, score, reasons });
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Unexpected error";
+      setError(msg);
+      console.error("Detection error:", err);
+    } finally {
+      setAnalyzing(false);
+    }
+  };
 
   return (
     <div className="p-6 md:p-8 max-w-3xl mx-auto space-y-8">
@@ -109,14 +72,17 @@ const ScamDetector = () => {
         <p className="text-muted-foreground">Paste any SMS or email to check if it's a scam</p>
       </motion.div>
 
+      {/* Input */}
       <div className="space-y-4">
         <textarea
+          id="scam-input"
           value={input}
           onChange={(e) => setInput(e.target.value)}
           placeholder="Paste SMS or email content here..."
           className="w-full h-40 p-4 rounded-xl bg-card border border-border text-foreground placeholder:text-muted-foreground resize-none focus:outline-none focus:ring-2 focus:ring-safe/50 font-mono text-sm"
         />
         <motion.button
+          id="analyze-btn"
           whileHover={{ scale: 1.02 }}
           whileTap={{ scale: 0.98 }}
           onClick={analyze}
@@ -128,21 +94,40 @@ const ScamDetector = () => {
         </motion.button>
       </div>
 
+      {/* Spinner */}
       {analyzing && (
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           className="flex flex-col items-center gap-4 py-8"
         >
-          <motion.div
-            animate={{ rotate: 360 }}
-            transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
-            className="w-8 h-8 border-2 border-safe border-t-transparent rounded-full"
-          />
-          <p className="text-muted-foreground text-sm font-mono">Analyzing message...</p>
+          <Loader2 className="h-8 w-8 text-safe animate-spin" />
+          <p className="text-muted-foreground text-sm font-mono">Analyzing with Kavach AI...</p>
         </motion.div>
       )}
 
+      {/* Error */}
+      <AnimatePresence>
+        {error && !analyzing && (
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0 }}
+            className="rounded-xl border border-danger/30 bg-danger/5 p-6 flex items-start gap-3"
+          >
+            <WifiOff className="h-5 w-5 text-danger mt-0.5 shrink-0" />
+            <div>
+              <h3 className="text-danger font-semibold">Connection Error</h3>
+              <p className="text-sm text-muted-foreground mt-1">
+                Could not reach the backend. Make sure the server is running on port 8000.
+              </p>
+              <p className="text-xs text-muted-foreground mt-1 font-mono">{error}</p>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Result */}
       <AnimatePresence>
         {result && !analyzing && (
           <motion.div
@@ -150,9 +135,12 @@ const ScamDetector = () => {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0 }}
             className={`rounded-xl border p-6 space-y-6 ${
-              result.isScam ? "border-danger/30 bg-danger/5 glow-danger" : "border-safe/30 bg-safe/5 glow-safe"
+              result.isScam
+                ? "border-danger/30 bg-danger/5 glow-danger"
+                : "border-safe/30 bg-safe/5 glow-safe"
             }`}
           >
+            {/* Header row */}
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 {result.isScam ? (
@@ -165,10 +153,12 @@ const ScamDetector = () => {
                     {result.isScam ? "High Risk Scam" : "Looks Safe"}
                   </h3>
                   <p className="text-sm text-muted-foreground">
-                    {result.isScam ? "This message contains multiple red flags" : "No significant threats detected"}
+                    {result.isScam
+                      ? "This message contains multiple red flags"
+                      : "No significant threats detected"}
                   </p>
                   <p className={`text-xs mt-1 ${result.isScam ? "text-danger" : "text-safe"}`}>
-                    AI Confidence: {result.isScam ? "High" : "Strong"}
+                    AI Confidence: {result.score}%
                   </p>
                 </div>
               </div>
@@ -181,40 +171,33 @@ const ScamDetector = () => {
               />
             </div>
 
-            {result.isScam ? (
-              <div className="rounded-lg border border-danger/30 bg-danger/10 p-3 text-sm font-mono whitespace-pre-wrap leading-relaxed">
-                {highlightedMessage.split(/(\[\[.*?\]\])/g).map((part, idx) => {
-                  const isHighlight = part.startsWith("[[") && part.endsWith("]]");
-                  return (
-                    <span key={idx} className={isHighlight ? "text-danger font-semibold bg-danger/20 px-1 rounded" : "text-foreground"}>
-                      {isHighlight ? part.slice(2, -2) : part}
-                    </span>
-                  );
-                })}
-              </div>
-            ) : (
+            {/* Safe message notice */}
+            {!result.isScam && (
               <motion.div
                 initial={{ opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
                 className="rounded-lg border border-safe/40 bg-safe/10 p-3"
               >
                 <p className="text-safe font-semibold">Safe Message Pattern</p>
-                <p className="text-xs text-muted-foreground mt-1">No urgency, phishing link, or unknown-sender coercion detected.</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  No urgency, phishing link, or unknown-sender coercion detected.
+                </p>
               </motion.div>
             )}
 
+            {/* Findings */}
             <div className="space-y-2">
-              <h4 className="text-sm font-semibold text-foreground">Findings:</h4>
+              <h4 className="text-sm font-semibold text-foreground">AI Analysis:</h4>
               {result.reasons.map((r, i) => (
                 <motion.div
                   key={i}
                   initial={{ opacity: 0, x: -10 }}
                   animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: i * 0.1 }}
-                  className="flex items-center gap-2 text-sm text-muted-foreground"
+                  transition={{ delay: i * 0.06 }}
+                  className="flex items-start gap-2 text-sm text-muted-foreground"
                 >
-                  <span className={result.isScam ? "text-danger" : "text-safe"}>•</span>
-                  {r}
+                  <span className={`mt-0.5 ${result.isScam ? "text-danger" : "text-safe"}`}>•</span>
+                  <span>{r}</span>
                 </motion.div>
               ))}
             </div>

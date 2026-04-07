@@ -1,5 +1,5 @@
-streamlit
 fastapi
-uvicorn
+uvicorn[standard]
 pydantic
-sqlite-utils
+python-dotenv
+google-generativeai
