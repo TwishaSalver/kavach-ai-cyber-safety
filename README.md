@@ -54,3 +54,47 @@ The War-Room uses three specialized agents to simulate, dissect, and defend agai
 - 🧑‍🏫 Provide **hands-on defense training** in a safe, controlled environment.
 
 ---
+## 🚀 Quick Start (Integrated Setup)
+
+Both frontend and backend now run on the same port (8000) for simplified deployment.
+
+### Prerequisites
+- Python 3.11+
+- Node.js 18+
+- Google Gemini API Key
+
+### Setup & Run
+1. **Clone the repository**
+   ```bash
+   git clone <repository-url>
+   cd Cyber_Safety_Simulator-main
+   ```
+
+2. **Configure API Key**
+   - Edit `kavach_backend/.env`
+   - Add: `GEMINI_API_KEY=your_actual_api_key_here`
+   - Get key from: https://aistudio.google.com/apikey
+
+3. **Run Integrated Application**
+   ```bash
+   # Windows
+   run_integrated.bat
+
+   # Or manually:
+   cd kavach_frontend && npm install && npm run build
+   cd ../kavach_backend
+   xcopy ..\kavach_frontend\dist static /E /I /Y
+   python main.py
+   ```
+
+4. **Access the Application**
+   - Open browser: http://localhost:8000
+   - Both frontend and API will be available on the same port
+
+### API Endpoints
+- `GET /health` - Server health check
+- `POST /detect` - Analyze message for scams
+- `POST /explain` - Get detailed scam explanation
+- `POST /action` - Get recommended actions
+- `POST /simulate` - Generate scam simulation
+- `GET /history` - View detection history

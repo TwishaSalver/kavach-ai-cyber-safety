@@ -43,9 +43,6 @@ def api_response(success: bool, data: dict, message: str = ""):
 # ──────────────────────────────────────────────
 # Routes
 # ──────────────────────────────────────────────
-@app.get("/")
-def home():
-    return api_response(True, {}, "Kavach AI Backend Running")
 
 
 @app.get("/health")
