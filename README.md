@@ -69,7 +69,7 @@ Both frontend and backend now run on the same port (8000) for simplified deploym
    git clone <repository-url>
    cd Cyber_Safety_Simulator-main
    ```
-
+   
 2. **Configure API Key**
    - Edit `kavach_backend/.env`
    - Add: `GEMINI_API_KEY=your_actual_api_key_here`
