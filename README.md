@@ -98,3 +98,4 @@ Both frontend and backend now run on the same port (8000) for simplified deploym
 - `POST /action` - Get recommended actions
 - `POST /simulate` - Generate scam simulation
 - `GET /history` - View detection history
+  
