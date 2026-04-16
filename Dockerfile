@@ -1,39 +1,28 @@
-# ---------- Stage 1: Build Frontend ----------
+# Stage 1: Build React frontend
 FROM node:18-alpine AS frontend
-
 WORKDIR /frontend
-
-# Install dependencies
 COPY kavach_frontend/package*.json ./
-RUN npm install
-
-# Copy frontend code
+RUN npm install --production
 COPY kavach_frontend/ .
-
-# Build frontend (creates dist/)
 RUN npm run build
 
-
-# ---------- Stage 2: Backend ----------
+# Stage 2: Python backend
 FROM python:3.11-slim
-
 WORKDIR /app
 
-# Copy backend code
+# Copy backend code (includes agents/)
 COPY kavach_backend/ ./kavach_backend/
 
-# Copy built frontend into backend static folder
+# Copy built frontend into backend's static folder
 COPY --from=frontend /frontend/dist ./kavach_backend/static
 
 # Install Python dependencies
 RUN pip install --no-cache-dir -r kavach_backend/requirements.txt
 
-# Set environment variable for port
+# Cloud Run uses PORT env variable
 ENV PORT=8080
 EXPOSE 8080
 
-# Move into backend directory
+# Run from the kavach_backend directory so imports resolve correctly
 WORKDIR /app/kavach_backend
-
-# Start backend
 CMD ["python", "main.py"]
