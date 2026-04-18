@@ -1,0 +1,23 @@
+# Docker Build Ignore Patterns
+node_modules/
+npm-debug.log
+yarn-error.log
+.env
+.env.local
+.env.*.local
+.DS_Store
+dist/
+build/
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+.pytest_cache/
+.venv/
+venv/
+.git/
+.gitignore
+README.md
+.env.example
+*.test.ts
+*.test.tsx
