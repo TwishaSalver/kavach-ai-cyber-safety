@@ -31,3 +31,20 @@ node_modules/
 dist/
 build/
 *.db
+
+# Build outputs
+kavach_backend/static/
+
+# Deployment scripts
+deploy-cloud-run.bat
+deploy-cloud-run.sh
+verify-integration.bat
+
+# Deployment guides (use README.md and CLOUD_RUN_DEPLOYMENT.md)
+DEPLOYMENT_STEPS.md
+DEPLOYMENT_SUMMARY.md
+QUICKSTART.md
+RUN_INSTRUCTIONS.txt
+
+# Root index
+index.html
